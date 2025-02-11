@@ -82,8 +82,9 @@ void PolarToCartesian(const std::vector<double>& azimuths, const cv::Mat fft, cv
       // std::cout << x << " " << y << std::endl;
       // std::cout << "max: " << range_max << std::endl;
       if (x >= 0 && x < range_max && y >= 0 && y < range_max) {
-        cartesian.at<float>(y, x) = fft.at<float>(i, r) > 0.2 ? 1 : 0;
+        cartesian.at<float>(y, x) = fft.at<float>(i, r) > 0.1 ? 1 : 0;  // for visualize
       }
     }
   }
 }
+
