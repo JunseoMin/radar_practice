@@ -1,14 +1,51 @@
 cmake_minimum_required(VERSION 3.10)
-project(RadarProcessing)
+project(RadarSLAM)
 
 # C++ 표준 설정
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(OpenMP)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
-add_executable(radar_processing src/test_main.cc)
+configure_file(
+  pmc/pmc.CMakeLists.txt.in
+  pmc-download/CMakeLists.txt
+  @ONLY
+)
 
-target_link_libraries(radar_processing PRIVATE ${OpenCV_LIBS} Eigen3::Eigen)
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -G "${CMAKE_GENERATOR}" .
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/pmc-download"
+)
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" --build .
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/pmc-download"
+)
+add_subdirectory(
+  "${CMAKE_BINARY_DIR}/pmc-download/pmc-src"
+  "${CMAKE_BINARY_DIR}/pmc-download/pmc-build"
+)
+
+include_directories(
+  ${PROJECT_SOURCE_DIR}/include
+  ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
+)
+set(radar_src
+  src/FeatureBasedPoseTracker.cc
+)
+
+add_executable(radar_processing src/test_main.cc radar_src)
+
+
+target_link_libraries(radar_processing 
+  PUBLIC 
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    Eigen3::Eigen
+    pmc
+    stdc++fs
+    )
