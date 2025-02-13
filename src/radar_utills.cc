@@ -24,7 +24,6 @@ void getRadarOnce(const std::string& filepath, std::vector<int64_t>& timestamps,
     }
   }
 
-  std::cout << "[INFO] radar initialized!" << std::endl;
 }
 
 void PolarToCartesian(const std::vector<double>& azimuths, const cv::Mat fft, cv::Mat& cartesian) {
@@ -32,9 +31,9 @@ void PolarToCartesian(const std::vector<double>& azimuths, const cv::Mat fft, cv
   int range_max = fft.cols;
   int center    = int(range_max / 2);
 
-  cartesian = cv::Mat::zeros(range_max,range_max, CV_32F);
+  cartesian = cv::Mat::zeros(range_max, range_max, CV_32F);
 
-  std::cout << "cart init" << std::endl;
+  // std::cout << "cart init" << std::endl;
 
   for (int i = 0; i < N; i ++){
     int x,y;
@@ -45,9 +44,53 @@ void PolarToCartesian(const std::vector<double>& azimuths, const cv::Mat fft, cv
       // std::cout << x << " " << y << std::endl;
       // std::cout << "max: " << range_max << std::endl;
       if (x >= 0 && x < range_max && y >= 0 && y < range_max) {
-        cartesian.at<float>(y, x) = fft.at<float>(i, r) > 0.1 ? 1 : 0;  // for visualize
+        cartesian.at<float>(y, x) = fft.at<float>(i, r);  // for visualize
       }
     }
   }
+}
+
+std::vector<std::string> getPathDir(const std::string& filepath){
+  std::vector<std::string> filepaths;
+  
+  try{
+    for (const auto& entry: std::filesystem::directory_iterator(filepath)){
+      if (entry.is_regular_file() && entry.path().extension() == ".png")
+      {
+        filepaths.emplace_back(entry.path().string());
+      }
+    }
+  }
+  catch(const std::exception& e){
+    std::cout << "[Error] error during dataset interation! check dataset dir" << std::endl;
+  }
+
+  std::sort(filepaths.begin(),filepaths.end());
+  return filepaths;
+}
+
+void getNRadar(const std::string& filepath, std::vector<RadarFFT>& radar_ffts, 
+              std::vector<RadarCartesian>& radar_carts, const int& N){
+  
+  std::vector<std::string> dirs = getPathDir(filepath);
+  std::vector<std::string> dirsSlice(dirs.begin(), dirs.begin() + std::min(N, static_cast<int>(dirs.size())));
+
+  for(const auto& dir : dirsSlice){
+    std::vector<int64_t> timestamp;
+    std::vector<double> azimuths;
+    cv::Mat FFt;
+    cv::Mat cart;
+
+    getRadarOnce(dir,timestamp,azimuths,FFt);
+    RadarFFT radar_fft(timestamp, azimuths, FFt);
+
+    PolarToCartesian(radar_fft.azimuths, radar_fft.fft, cart);
+    RadarCartesian radar_cart(timestamp, azimuths, cart);
+
+    radar_carts.emplace_back(radar_cart);
+    radar_ffts.emplace_back(radar_fft);
+  }
+
+  std::cout << "[INFO] radar initialized!" << std::endl;
 }
 
