@@ -35,7 +35,9 @@ pmc::pmc_graph EigenToPMC(const Eigen::MatrixXd& G){
 }
 
 FeatureBasedPoseTracker::FeatureBasedPoseTracker(const double& optim_threshold){
-  this->_orb                      = cv::ORB::create();
+  this->_orb                      = cv::ORB::create(1000); 
+  // this->_orb                      = cv::ORB::create(1000, 1.5f, 8, 1, 0, 2, 
+                                          //  cv::ORB::HARRIS_SCORE, 50, 1);
   this->_key_id                   = 0;
   this -> _matcher                = cv::BFMatcher(cv::NORM_HAMMING, true);
   this -> _optim_treshold         = optim_threshold;
@@ -57,19 +59,27 @@ FeatureBasedPoseTracker::FeatureBasedPoseTracker(const double& optim_threshold){
   this -> _in.decreasing_order    = false;
   this -> _in.heu_strat           = "kcore";
   this -> _in.vertex_search_order = "deg";
+
+  std::cout << "[Info] Solver initialized!" << std::endl;
 }
 
 void FeatureBasedPoseTracker::setCurrentFrame(cv::Mat& current_frame){
   this->_current_frame = current_frame;
+  std::cout << "original size: " << current_frame.rows << " x " <<current_frame.cols << std::endl;
+  
+  // post process1: cubic interpolation and change size to 640x640 - seems doesn't have much impact..
+  cv::resize(_current_frame, _current_frame, cv::Size(640, 640), 0, 0, cv::INTER_LANCZOS4); 
+  
+  // morphology calc
+  // cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+  // cv::dilate(_current_frame, _current_frame, kernel);
+  // cv::morphologyEx(_current_frame, _current_frame, cv::MORPH_CLOSE, kernel);
+
+  std::cout << "[Info] frame set! "<< std::endl;
 }
 
 Eigen::Matrix3d FeatureBasedPoseTracker::getPose(){
-  Eigen::Matrix3d pose = Eigen::Matrix3d::Identity();
-
-  pose.block<2,2>(0,0) = _rot;
-  pose.block<2,1>(0,2) = _trans;
-
-  return pose;
+  return _pose;
 }
 
 /**
@@ -82,10 +92,33 @@ void FeatureBasedPoseTracker::solve(){
   _descriptors = cv::Mat();
   
   // 1. get orb feature from frame
-  _orb->detectAndCompute(_current_frame,cv::Mat(),_keypoints,_descriptors);
-  
+
+  std::cout << "input channel: " << _current_frame.channels() << std::endl;
+  if (_current_frame.empty()) {
+    throw std::logic_error("[Error] input frame empty!");
+  }
+  if (_current_frame.depth() != CV_8UC1) {
+    std::cout << "[Info] Converting depth to CV_8UC1 type" << std::endl;
+    _current_frame.convertTo(_current_frame, CV_8UC1, 255.0);
+  }
+
+  cv::imshow("origin frame", _current_frame);
+
+  _orb->detectAndCompute(_current_frame, cv::Mat(), _keypoints, _descriptors);
+  std::cout << "[Info] orb extracted" << std::endl;
+  std::cout << "[Info] num keypoints: " << _keypoints.size() << std::endl;
+
+  // debug... feature doesn't extracted with direct input need pre-processing or change ORB param  - Nope!
+  cv::Mat img_keypoints;
+  cv::drawKeypoints(_current_frame, _keypoints, img_keypoints, cv::Scalar(0, 255, 0), cv::DrawMatchesFlags::DEFAULT);
+  cv::imshow("ORB Keypoints", img_keypoints);
+  cv::waitKey(0);
+
   if(_key_id == 0){ // case initialize
+    std::cout << "[Info] Frame initialized!!" << std::endl;
     _pose = Eigen::Matrix3d::Identity();
+    std::cout << "initial pose: \n"
+              << _pose << std::endl;
     _addKeyframe();
     return;
   }
@@ -97,7 +130,9 @@ void FeatureBasedPoseTracker::solve(){
   // 3. solve pose optimization (graph optimization)
   _findGoodMatch();
   _findMaxClique();
+  _guessInitialPose();
   _optimizePose();
+  _visualizeInliers();
 
   //4. add keyframe if needed
   if(_isRequireKeyframe()) _addKeyframe();
@@ -108,6 +143,8 @@ void FeatureBasedPoseTracker::solve(){
 void FeatureBasedPoseTracker::_addKeyframe(){
   this->_key_frames.emplace_back(Keyframe(_key_id, _current_frame, _keypoints, _descriptors, _pose));
   _key_id ++;
+  std::cout << "Next key id: "            << _key_id << std::endl;
+  std::cout << "current key frame size: " << _key_frames.size() << std::endl;
 }
 
 void FeatureBasedPoseTracker::_getMatchedKeyframe(){
@@ -117,8 +154,10 @@ void FeatureBasedPoseTracker::_getMatchedKeyframe(){
 
   for(auto& keyframe: _key_frames){
     std::vector<cv::DMatch> matches;
-    _matcher.match(keyframe.descriptors, _descriptors, matches);
+    _matcher.match(keyframe.descriptors, _descriptors, matches);  // tlqkf durltj qkRiTsp zz
 
+    // std::cout << "match size: " << matches.size() << std::endl;
+    
     if (matches.size() > cnt_best_match)
     {
       cnt_best_match = matches.size();
@@ -153,7 +192,7 @@ void FeatureBasedPoseTracker::_findGoodMatch(){
     }
   }
   std::cout << "[Debug] original matches size: " << _matches.size() << std::endl 
-            << "number of good matches: " << (_G.array() > 0).count() << std::endl;
+            << "[Info] number of good matches: " << (_G.array() > 0).count() << std::endl;
 }
 
 void FeatureBasedPoseTracker::_findMaxClique(){
@@ -175,7 +214,14 @@ void FeatureBasedPoseTracker::_findMaxClique(){
   else{
     pmc::pmcx_maxclique finder(p_G, _in);
     finder.search(p_G, _inliers);    
-  } 
+  }
+  std::cout << "inlier index(?):\n";
+  
+  for(auto& inlier : _inliers){
+    std::cout << inlier << ",";
+  }
+  std::cout << "\n";
+  std::cout << "[Info] number of inliers: " << _inliers.size() << std::endl;
   // upper lines are followed by TEASER ++ pipeline
   // olny thing have to do is optimize pose and get C_t
 }
@@ -187,10 +233,10 @@ void FeatureBasedPoseTracker::_guessInitialPose(){
   std::vector<Eigen::Vector2d> p_ts;
 
   for(auto& i : _inliers){
-    Eigen::Vector2d p_t(_keypoints[_matches[i].queryIdx].pt.x,
-                        _keypoints[_matches[i].queryIdx].pt.y);
-    Eigen::Vector2d p_k(_key_frames[_best_match_id].keypoints[_matches[i].trainIdx].pt.x,
-                        _key_frames[_best_match_id].keypoints[_matches[i].trainIdx].pt.y);
+    Eigen::Vector2d p_t(_keypoints[_matches[i].trainIdx].pt.x,
+                        _keypoints[_matches[i].trainIdx].pt.y);
+    Eigen::Vector2d p_k(_key_frames[_best_match_id].keypoints[_matches[i].queryIdx].pt.x,
+                        _key_frames[_best_match_id].keypoints[_matches[i].queryIdx].pt.y);
     p_ts.emplace_back(p_t);
     p_ks.emplace_back(p_k);
   }
@@ -234,13 +280,17 @@ void FeatureBasedPoseTracker::_guessInitialPose(){
   _initial_pose = Eigen::Matrix3d::Identity();
   _initial_pose.block<2,2>(0,0) = R;
   _initial_pose.block<2,1>(0,2) = t;
+  std::cout << "initial pose: \n" << _initial_pose << std::endl;
 }
 
 void FeatureBasedPoseTracker::_optimizePose(){
+  std::cout << "[Info] optimize start" << std::endl;
   double pose[3] = {_initial_pose(0,2), _initial_pose(1,2), atan2(_initial_pose(1,0),_initial_pose(0,0))};  // translation to keyframe
+  // double pose[3] = {1, 1, atan2(1,1)};  // translation to keyframe
 
   ceres::Problem               problem; //equation(4)
   std::vector<Eigen::Vector2d> P_w; // keyframe points in word coordinate
+  // std::cout << _p_ks.size() << "?!?!?!?!?!?!?!?!??" << std::endl;
 
   for (const auto& p_k : _p_ks){
     Eigen::Vector3d pk_h(p_k(0),p_k(1),1);
@@ -256,14 +306,18 @@ void FeatureBasedPoseTracker::_optimizePose(){
       );
     problem.AddResidualBlock(cost_function, nullptr, pose);
   }
+
+  assert(problem.NumResidualBlocks() != 0);
+  // std::cout << "Number of residual blocks: " << problem.NumResidualBlocks() << std::endl;
+
   ceres::Solver::Options options;
   options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = true;
+  options.minimizer_progress_to_stdout = false;
 
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
 
-  std::cout << summary.BriefReport() << std::endl;
+  // std::cout << summary.BriefReport() << std::endl;
 
   _pose << cos(pose[2]), -sin(pose[2]), pose[0],
            sin(pose[2]),  cos(pose[2]), pose[1],
@@ -288,4 +342,29 @@ bool FeatureBasedPoseTracker::_isRequireKeyframe(){
   if(std::abs(angle_diff) > 90) return true;
 
   return false;
+}
+
+void FeatureBasedPoseTracker::_visualizeInliers() {
+  cv::Mat frame_visual;
+  if (_current_frame.channels() == 1) {
+    cv::cvtColor(_current_frame, frame_visual, cv::COLOR_GRAY2BGR);
+  } else {
+    frame_visual = _current_frame.clone();
+  }
+  cv::Mat keyframe_visual;
+  if (_key_frames[_best_match_id].image.channels() == 1) {
+    cv::cvtColor(_key_frames[_best_match_id].image, keyframe_visual, cv::COLOR_GRAY2BGR);
+  } else {
+    keyframe_visual = _key_frames[_best_match_id].image.clone();
+  }
+  for (const auto& idx : _inliers) {
+    cv::Point2d pt_t = _keypoints[_matches[idx].trainIdx].pt;
+    cv::Point2d pt_k = _key_frames[_best_match_id].keypoints[_matches[idx].queryIdx].pt;
+    cv::circle(frame_visual, pt_t, 5, cv::Scalar(0, 255, 0), -1);
+    cv::circle(keyframe_visual, pt_k, 5, cv::Scalar(0, 0, 255), -1);
+    cv::line(frame_visual, pt_t, pt_k, cv::Scalar(255, 0, 0), 2);
+  }
+  cv::imshow("Inliers in Current Frame", frame_visual);
+  cv::imshow("Inliers in Keyframe", keyframe_visual);
+  cv::waitKey(0);
 }

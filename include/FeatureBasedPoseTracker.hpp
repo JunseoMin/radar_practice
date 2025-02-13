@@ -22,8 +22,8 @@ public:
    */
   FeatureBasedPoseTracker() = default;
   FeatureBasedPoseTracker(const double& optim_treshold);
-  void setCurrentFrame(cv::Mat& current_frame);
 
+  void setCurrentFrame(cv::Mat& current_frame);
   void showTracked();
   void solve();
 
@@ -56,6 +56,8 @@ private:
       // Compute residuals (how far P_t is from P_w)
       residuals[0] = P_t_x - T(P_w_(0));
       residuals[1] = P_t_y - T(P_w_(1));
+      // std::cout << "Residual: " << residuals[0] << ", " << residuals[1] << std::endl;
+
       return true;
   }
   private:
@@ -75,6 +77,7 @@ private:
   void _findMaxClique();
   void _guessInitialPose();
   void _optimizePose();
+  void _visualizeInliers();
 
   cv::Mat _current_frame;
   cv::Mat _orb_frame;
@@ -86,8 +89,6 @@ private:
   std::vector<Keyframe> _key_frames;  // map points
   cv::Mat _descriptors;
 
-  Eigen::Matrix2d _rot;
-  Eigen::Vector2d _trans;
   Eigen::Matrix3d _pose;
   Eigen::Matrix3d _initial_pose;
 
