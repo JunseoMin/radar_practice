@@ -1,6 +1,38 @@
 #include <radartypes.hpp>
-#include <radar_utills.hpp>
-#include <FeatureBasedPoseTracker.hpp>
+#include "radar_utills.hpp"
+#include "FeatureBasedPoseTracker.hpp"
+
+pmc::pmc_graph EigenToPMC(const Eigen::MatrixXd& G){
+  vector<long long> vs;
+  vector<int>       es;
+
+  vs.push_back(0);
+
+  int tmp = 0;
+
+  for (int vertex = 0; vertex < G.rows(); vertex++)
+  {
+    int n_edges =  G.row(vertex).sum();
+    tmp += n_edges;
+    vs.push_back(tmp);
+    for (int edge_idx = 0; edge_idx < G.cols(); edge_idx ++){
+      if (G(vertex,edge_idx) == 1)
+      {
+        es.push_back(edge_idx);
+      }
+    }
+  }
+  
+  // std::cout << "vs: " << std::endl;
+  // for (int v : vs) cout << v << " ";
+  // std::cout << std::endl;
+  // std::cout << "es: " << std::endl;
+  // for (int e : es) cout << e << " ";
+  // std::cout << std::endl;
+
+  pmc::pmc_graph p_G(vs,es);
+  return p_G;
+}
 
 FeatureBasedPoseTracker::FeatureBasedPoseTracker(const double& optim_threshold){
   this->_orb                      = cv::ORB::create();
@@ -44,7 +76,7 @@ Eigen::Matrix3d FeatureBasedPoseTracker::getPose(){
  * @brief solves SE(2) position matrix
  */
 void FeatureBasedPoseTracker::solve(){
-  assert(_current_frame.size > 0);
+  // assert(_current_frame.size() > 0);
 
   _keypoints.clear();
   _descriptors = cv::Mat();
@@ -238,37 +270,7 @@ void FeatureBasedPoseTracker::_optimizePose(){
            0,             0,             1;
 }
 
-pmc::pmc_graph EigenToPMC(const Eigen::MatrixXd& G){
-  vector<long long> vs;
-  vector<int>       es;
 
-  vs.push_back(0);
-
-  int tmp = 0;
-
-  for (int vertex = 0; vertex < G.rows(); vertex++)
-  {
-    int n_edges =  G.row(vertex).sum();
-    tmp += n_edges;
-    vs.push_back(tmp);
-    for (int edge_idx = 0; edge_idx < G.cols(); edge_idx ++){
-      if (G(vertex,edge_idx) == 1)
-      {
-        es.push_back(edge_idx);
-      }
-    }
-  }
-  
-  // std::cout << "vs: " << std::endl;
-  // for (int v : vs) cout << v << " ";
-  // std::cout << std::endl;
-  // std::cout << "es: " << std::endl;
-  // for (int e : es) cout << e << " ";
-  // std::cout << std::endl;
-
-  pmc::pmc_graph p_G(vs,es);
-  return p_G;
-}
 
 bool FeatureBasedPoseTracker::_isRequireKeyframe(){
   Eigen::Vector2d t_k = _key_frames[_best_match_id].pose.block<2,1>(0,2);
