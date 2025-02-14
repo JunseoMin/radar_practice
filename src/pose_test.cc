@@ -1,3 +1,5 @@
+// This code realllllllllllllllllllllllly slow..
+
 #include <iostream>
 #include "radar_utills.hpp"
 #include "FeatureBasedPoseTracker.hpp"
@@ -9,14 +11,14 @@ int main(void){
 
   Eigen::Matrix3d pose;
 
-  int n_iter = 10;
+  int n_iter = 200;
   int frame = 1;
 
   getNRadar(filepath, ffts, carts, n_iter);
-  FeatureBasedPoseTracker tracker(10);
+  FeatureBasedPoseTracker tracker(0.1);
 
   for(const auto& cartesian : carts){
-
+    if (150 < frame) {
     std::cout << "current frame: " << frame << " ------------------" << "\n";
     cv::Mat cart = cartesian.cart_radar;
     tracker.setCurrentFrame(cart);
@@ -30,6 +32,12 @@ int main(void){
 
     cv::waitKey(0);
     frame ++;
+    }
+    else{
+      frame++; 
+      continue;
+
+    }
   }
   
   return 0;

@@ -14,6 +14,8 @@
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 
+#include <omp.h>
+
 class FeatureBasedPoseTracker
 {
 public:

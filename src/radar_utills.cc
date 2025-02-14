@@ -35,6 +35,7 @@ void PolarToCartesian(const std::vector<double>& azimuths, const cv::Mat fft, cv
 
   // std::cout << "cart init" << std::endl;
 
+#pragma omp parallel for
   for (int i = 0; i < N; i ++){
     int x,y;
     double a = azimuths[i];
