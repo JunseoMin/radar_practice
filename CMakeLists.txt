@@ -40,6 +40,7 @@ include_directories(
 
 set(radar_src
   src/FeatureBasedPoseTracker.cc
+  src/LocalMapping.cc
   src/radar_utills.cc
 )
 

@@ -110,6 +110,7 @@ void FeatureBasedPoseTracker::solve(){
   // 2. find closest key frame
   _getMatchedKeyframe();
   assert(_best_match_id != -1);
+  std::cout << "keyframe id: " << _best_match_id << "\n";
 
   // 3. solve pose optimization (graph optimization)
   _findGoodMatch();

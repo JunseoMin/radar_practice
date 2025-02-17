@@ -15,10 +15,9 @@ int main(void){
   int frame = 1;
 
   getNRadar(filepath, ffts, carts, n_iter);
-  FeatureBasedPoseTracker tracker(0.1);
+  FeatureBasedPoseTracker tracker(1);
 
   for(const auto& cartesian : carts){
-    if (150 < frame) {
     std::cout << "current frame: " << frame << " ------------------" << "\n";
     cv::Mat cart = cartesian.cart_radar;
     tracker.setCurrentFrame(cart);
@@ -32,12 +31,6 @@ int main(void){
 
     cv::waitKey(0);
     frame ++;
-    }
-    else{
-      frame++; 
-      continue;
-
-    }
   }
   
   return 0;
